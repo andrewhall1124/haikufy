@@ -175,7 +175,18 @@ Try again with a different phrasing."""
             lines.append(line)
             syllable_counts.append(count)
 
-        haiku = "\n".join(lines)
+        # Capitalize first word of each line
+        capitalized_lines = []
+        for line in lines:
+            if line:
+                # Capitalize the first character of the line
+                capitalized_line = line[0].upper() + line[1:] if len(line) > 1 else line.upper()
+                capitalized_lines.append(capitalized_line)
+            else:
+                capitalized_lines.append(line)
+
+        # Join lines and ensure no trailing newlines
+        haiku = "\n".join(capitalized_lines).rstrip()
         is_valid = (syllable_counts == [5, 7, 5])
 
         return haiku, syllable_counts, is_valid

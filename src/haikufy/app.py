@@ -17,7 +17,6 @@ class HaikufyApp(App):
             yield Label("Enter your text to convert to a haiku:", id="title")
             yield Input(placeholder="Type your message here...", id="input-box")
             yield Button("Haikufy", id="haikufy-button", variant="primary")
-            yield Label("", id="loading")
             yield Static("", id="haiku-output")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
@@ -27,9 +26,8 @@ class HaikufyApp(App):
             text = input_widget.value.strip()
 
             if text:
-                # Clear previous output and show loading
-                self.query_one("#haiku-output", Static).update("")
-                self.query_one("#loading", Label).update("Generating haiku...")
+                # Show loading in output container
+                self.query_one("#haiku-output", Static).update("Generating haiku...")
 
                 # Disable button during generation
                 event.button.disabled = True
@@ -37,7 +35,7 @@ class HaikufyApp(App):
                 # Start the async haiku generation
                 self.generate_haiku_async(text)
             else:
-                self.query_one("#loading", Label).update("Please enter some text first!")
+                self.query_one("#haiku-output", Static).update("Please enter some text first!")
 
     @work(exclusive=True, thread=True)
     def generate_haiku_async(self, text: str) -> None:
@@ -58,8 +56,6 @@ class HaikufyApp(App):
 
     def update_result(self, output: str | None, error: str | None) -> None:
         """Update UI with results (called from worker thread)"""
-        self.query_one("#loading", Label).update("")
-
         if error:
             self.query_one("#haiku-output", Static).update(f"Error: {error}")
         elif output:
