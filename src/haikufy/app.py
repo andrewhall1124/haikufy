@@ -81,7 +81,7 @@ class HaikufyApp(App):
 
             # Format the haiku output
             output = f"{haiku}\n\n"
-            
+
             # Update the UI with the result (using call_from_thread for thread safety)
             self.call_from_thread(self.update_result, output, None)
 
@@ -100,12 +100,3 @@ class HaikufyApp(App):
 
         # Re-enable the button
         self.query_one("#haikufy-button", Button).disabled = False
-
-
-def main():
-    app = HaikufyApp()
-    app.run()
-
-
-if __name__ == "__main__":
-    main()
