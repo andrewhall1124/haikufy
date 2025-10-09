@@ -23,3 +23,9 @@ Screen {
     border: solid $primary;
     height: 1fr;
 }
+
+#button-container {
+    align: center middle;
+    height: auto;
+}
+
