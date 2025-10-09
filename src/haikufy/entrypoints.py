@@ -1,4 +1,4 @@
-from src.haikufy.app import HaikufyApp
+from haikufy.app import HaikufyApp
 
 
 def haikufy():

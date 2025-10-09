@@ -37,10 +37,13 @@ Issues = "https://github.com/andrewhall1124/haikufy/issues"
 Source = "https://github.com/andrewhall1124/haikufy"
 
 [project.scripts]
-haikufy = "src.haikufy.entrypoints:haikufy"
+haikufy = "haikufy.entrypoints:haikufy"
 
 [tool.hatch.version]
 path = "src/haikufy/__about__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/haikufy"]
 
 [tool.hatch.envs.types]
 extra-dependencies = [
