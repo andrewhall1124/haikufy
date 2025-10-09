@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "haikufy"
+dynamic = ["version"]
+description = ''
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+keywords = []
+authors = [
+  { name = "andrewhall1124", email = "andrewmartinhall2@gmail.com" },
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = [
+    "huggingface-hub>=0.35.3",
+    "textual>=0.73.0",
+]
+
+[project.urls]
+Documentation = "https://github.com/andrewhall1124/haikufy#readme"
+Issues = "https://github.com/andrewhall1124/haikufy/issues"
+Source = "https://github.com/andrewhall1124/haikufy"
+
+[project.scripts]
+haikufy = "src.haikufy.entrypoints:haikufy"
+
+[tool.hatch.version]
+path = "src/haikufy/__about__.py"
+
+[tool.hatch.envs.types]
+extra-dependencies = [
+  "mypy>=1.0.0",
+]
+[tool.hatch.envs.types.scripts]
+check = "mypy --install-types --non-interactive {args:src/haikufy tests}"
+
+[tool.coverage.run]
+source_pkgs = ["haikufy", "tests"]
+branch = true
+parallel = true
+omit = [
+  "src/haikufy/__about__.py",
+]
+
+[tool.coverage.paths]
+haikufy = ["src/haikufy", "*/haikufy/src/haikufy"]
+tests = ["tests", "*/haikufy/tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+]
