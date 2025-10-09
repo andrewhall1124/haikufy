@@ -1,6 +1,6 @@
-from src.haikufy.app import HelloWorldApp
+from src.haikufy.app import HaikufyApp
 
 
 def haikufy():
-    app = HelloWorldApp()
+    app = HaikufyApp()
     app.run()

@@ -2,18 +2,14 @@ from textual.app import App, ComposeResult
 from textual.widgets import Input, Static
 
 
-class HelloWorldApp(App):
-    """A simple Textual app with hello world text and an input box."""
-
+class HaikufyApp(App):
     def compose(self) -> ComposeResult:
-        """Create child widgets for the app."""
-        yield Static("hello, world!")
         yield Input(placeholder="Type something here...")
+        yield Static("hello, world!")
 
 
 def main():
-    """Run the app."""
-    app = HelloWorldApp()
+    app = HaikufyApp()
     app.run()
 
 
