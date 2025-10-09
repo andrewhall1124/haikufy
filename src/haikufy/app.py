@@ -6,40 +6,7 @@ from haikufy.converter import HaikuConverter
 
 
 class HaikufyApp(App):
-    CSS = """
-    Screen {
-        align: center middle;
-    }
-
-    #main-container {
-        width: 80;
-        height: auto;
-        border: solid $primary;
-        padding: 1 2;
-    }
-
-    #input-box {
-        margin-bottom: 1;
-    }
-
-    #haikufy-button {
-        width: 20;
-        margin-bottom: 1;
-    }
-
-    #loading {
-        color: $warning;
-        margin-bottom: 1;
-    }
-
-    #haiku-output {
-        color: $success;
-        text-align: center;
-        margin-top: 1;
-        padding: 1;
-        border: solid $accent;
-    }
-    """
+    CSS_PATH = "app.tcss"
 
     def __init__(self):
         super().__init__()
@@ -100,3 +67,7 @@ class HaikufyApp(App):
 
         # Re-enable the button
         self.query_one("#haikufy-button", Button).disabled = False
+
+if __name__ == '__main__':
+    app = HaikufyApp()
+    app.run()

@@ -1,0 +1,29 @@
+Screen {
+    align: center top;
+}
+
+#main-container {
+    border: solid $primary;
+    padding: 1;
+}
+
+#input-box {
+    margin: 1 0;
+}
+
+#haikufy-button {
+    margin-bottom: 1;
+}
+
+#loading {
+    color: $warning;
+    margin-bottom: 1;
+}
+
+#haiku-output {
+    color: $success;
+    text-align: center;
+    margin-top: 1;
+    padding: 1;
+    border: solid $primary;
+}
