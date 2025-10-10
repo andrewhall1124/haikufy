@@ -1,14 +1,20 @@
 import os
 import syllables
-from typing import Optional, List, Dict, Tuple, Any
+from typing import Optional, List, Dict, Tuple
 from dotenv import load_dotenv
-load_dotenv(override=True)
 from huggingface_hub import InferenceClient
+
+load_dotenv(override=True)
 
 LOGGING = False
 
+
 class HaikuConverter:
-    def __init__(self, model_name: str = "deepseek-ai/DeepSeek-V3-0324", api_token: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        model_name: str = "deepseek-ai/DeepSeek-V3-0324",
+        api_token: Optional[str] = None,
+    ) -> None:
         """
         Initialize the haiku converter with HuggingFace Inference Client
 
@@ -30,14 +36,14 @@ class HaikuConverter:
             )
 
         self.client = InferenceClient(token=self.api_token)
-    
+
     def create_line_messages(
         self,
         text: str,
         line_number: int,
         previous_lines: Optional[List[str]] = None,
         previous_attempt: Optional[str] = None,
-        actual_syllables: Optional[int] = None
+        actual_syllables: Optional[int] = None,
     ) -> List[Dict[str, str]]:
         """Create the chat messages for generating a single haiku line"""
         target_syllables = {1: 5, 2: 7, 3: 5}[line_number]
@@ -48,7 +54,7 @@ class HaikuConverter:
 """
 
         if previous_lines:
-            context += f"Previous lines:\n"
+            context += "Previous lines:\n"
             for i, line in enumerate(previous_lines, 1):
                 context += f"Line {i}: {line}\n"
             context += "\n"
@@ -67,37 +73,39 @@ Your previous attempt was: "{previous_attempt}"
 This had {actual_syllables} syllables, but we need EXACTLY {target_syllables}.
 Try again with a different phrasing."""
 
-        instruction += f"\n\nRespond with ONLY the line, nothing else."
+        instruction += "\n\nRespond with ONLY the line, nothing else."
 
         return [{"role": "user", "content": context + instruction}]
-    
+
     def count_syllables_in_line(self, line: str) -> int:
         """Count syllables in a line of text"""
         words = line.strip().split()
         total = sum(syllables.estimate(word) for word in words)
         return total
-    
+
     def validate_haiku(self, haiku_text: str) -> Tuple[bool, List[int]]:
         """
         Check if the haiku follows 5-7-5 pattern
         Returns: (is_valid, syllable_counts)
         """
-        lines = [line.strip() for line in haiku_text.strip().split('\n') if line.strip()]
-        
+        lines = [
+            line.strip() for line in haiku_text.strip().split("\n") if line.strip()
+        ]
+
         if len(lines) != 3:
             return False, []
-        
+
         counts = [self.count_syllables_in_line(line) for line in lines]
-        is_valid = (counts == [5, 7, 5])
-        
+        is_valid = counts == [5, 7, 5]
+
         return is_valid, counts
-    
+
     def generate_line(
         self,
         text: str,
         line_number: int,
         previous_lines: Optional[List[str]] = None,
-        max_attempts: int = 5
+        max_attempts: int = 5,
     ) -> Tuple[str, int, bool]:
         """
         Generate a single haiku line with the correct syllable count
@@ -137,7 +145,10 @@ Try again with a different phrasing."""
             actual_syllables = self.count_syllables_in_line(generated_line)
 
             if LOGGING:
-                print(f"  Attempt {attempt + 1}: \"{generated_line}\" ({actual_syllables} syllables)", end="")
+                print(
+                    f'  Attempt {attempt + 1}: "{generated_line}" ({actual_syllables} syllables)',
+                    end="",
+                )
 
             if actual_syllables == target_syllables:
                 if LOGGING:
@@ -149,10 +160,14 @@ Try again with a different phrasing."""
                 previous_attempt = generated_line
 
         # Return best attempt even if not valid
-        print(f"⚠️ Could not achieve {target_syllables} syllables after {max_attempts} attempts")
+        print(
+            f"⚠️ Could not achieve {target_syllables} syllables after {max_attempts} attempts"
+        )
         return generated_line, actual_syllables, False
 
-    def generate_haiku(self, text: str, max_line_attempts: int = 5) -> Tuple[str, List[int], bool]:
+    def generate_haiku(
+        self, text: str, max_line_attempts: int = 5
+    ) -> Tuple[str, List[int], bool]:
         """
         Generate a haiku line by line using feedback loops
         Each line is validated and regenerated until it has the correct syllable count
@@ -180,13 +195,15 @@ Try again with a different phrasing."""
         for line in lines:
             if line:
                 # Capitalize the first character of the line
-                capitalized_line = line[0].upper() + line[1:] if len(line) > 1 else line.upper()
+                capitalized_line = (
+                    line[0].upper() + line[1:] if len(line) > 1 else line.upper()
+                )
                 capitalized_lines.append(capitalized_line)
             else:
                 capitalized_lines.append(line)
 
         # Join lines and ensure no trailing newlines
         haiku = "\n".join(capitalized_lines).rstrip()
-        is_valid = (syllable_counts == [5, 7, 5])
+        is_valid = syllable_counts == [5, 7, 5]
 
         return haiku, syllable_counts, is_valid

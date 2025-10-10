@@ -21,7 +21,9 @@ class HaikufyApp(App):
             yield Button("Haikufy", id="haikufy-button", variant="primary")
             yield Static("", id="haiku-output")
             with Horizontal(id="button-container"):
-                yield Button("Copy Haiku", id="copy-button", variant="success", disabled=True)
+                yield Button(
+                    "Copy Haiku", id="copy-button", variant="success", disabled=True
+                )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button click"""
@@ -40,7 +42,9 @@ class HaikufyApp(App):
                 # Start the async haiku generation
                 self.generate_haiku_async(text)
             else:
-                self.query_one("#haiku-output", Static).update("Please enter some text first!")
+                self.query_one("#haiku-output", Static).update(
+                    "Please enter some text first!"
+                )
 
         elif event.button.id == "copy-button":
             # Copy the current haiku to clipboard
@@ -49,9 +53,18 @@ class HaikufyApp(App):
                     pyperclip.copy(self.current_haiku)
                     # Temporarily update button text to show feedback
                     event.button.label = "Copied!"
-                    self.set_timer(1.5, lambda: setattr(self.query_one("#copy-button", Button), "label", "Copy Haiku"))
+                    self.set_timer(
+                        1.5,
+                        lambda: setattr(
+                            self.query_one("#copy-button", Button),
+                            "label",
+                            "Copy Haiku",
+                        ),
+                    )
                 except Exception as e:
-                    self.query_one("#haiku-output", Static).update(f"Error copying to clipboard: {e}")
+                    self.query_one("#haiku-output", Static).update(
+                        f"Error copying to clipboard: {e}"
+                    )
 
     @work(exclusive=True, thread=True)
     def generate_haiku_async(self, text: str) -> None:
@@ -61,7 +74,7 @@ class HaikufyApp(App):
             haiku, syllable_counts, is_valid = self.converter.generate_haiku(text)
 
             # Format the haiku output
-            output = f"{haiku}\n\n"
+            output = f"{haiku}"
 
             # Update the UI with the result (using call_from_thread for thread safety)
             self.call_from_thread(self.update_result, output, None)
@@ -85,6 +98,7 @@ class HaikufyApp(App):
         # Re-enable the haikufy button
         self.query_one("#haikufy-button", Button).disabled = False
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     app = HaikufyApp()
     app.run()
