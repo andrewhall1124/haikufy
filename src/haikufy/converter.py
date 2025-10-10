@@ -161,7 +161,7 @@ Try again with a different phrasing."""
 
         # Return best attempt even if not valid
         print(
-            f"⚠️ Could not achieve {target_syllables} syllables after {max_attempts} attempts"
+            f"Could not achieve {target_syllables} syllables after {max_attempts} attempts"
         )
         return generated_line, actual_syllables, False
 
