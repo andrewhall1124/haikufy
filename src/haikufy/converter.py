@@ -1,48 +1,14 @@
 import os
 import re
-from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Tuple
+from src.haikufy.models.hugging_face_model import HuggingFaceModel
 
 import pyphen
 from dotenv import load_dotenv
-from huggingface_hub import InferenceClient
 
 load_dotenv(override=True)
 
 LOGGING = True
-
-
-class LanguageModel(ABC):
-    @abstractmethod
-    def generate(
-        self,
-        messages: List[Dict[str, str]],
-        max_tokens: int,
-        temperature: float,
-        top_p: float,
-    ) -> str:
-        pass
-
-
-class HuggingFaceModel(LanguageModel):
-    def __init__(self, model_name: str, api_token: str) -> None:
-        self.model_name = model_name
-        self.client = InferenceClient(token=api_token)
-
-    def generate(
-        self,
-        messages: List[Dict[str, str]],
-        max_tokens: int,
-        temperature: float,
-        top_p: float,
-    ) -> str:
-        return self.client.chat.completions.create(
-            model=self.model_name,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            top_p=top_p,
-        )
 
 
 class HaikuConverter:
