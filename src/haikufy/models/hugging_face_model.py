@@ -17,10 +17,14 @@ class HuggingFaceModel(LanguageModel):
         temperature: float,
         top_p: float,
     ) -> str:
-        return self.client.chat.completions.create(
-            model=self.model_name,
-            messages=messages,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            top_p=top_p,
+        return (
+            self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=top_p,
+            )
+            .choices[0]
+            .message.content.strip()
         )
