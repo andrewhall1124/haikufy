@@ -1,13 +1,48 @@
 import os
-import pyphen
 import re
-from typing import Optional, List, Dict, Tuple
+from abc import ABC, abstractmethod
+from typing import Dict, List, Optional, Tuple
+
+import pyphen
 from dotenv import load_dotenv
 from huggingface_hub import InferenceClient
 
 load_dotenv(override=True)
 
-LOGGING = False
+LOGGING = True
+
+
+class LanguageModel(ABC):
+    @abstractmethod
+    def generate(
+        self,
+        messages: List[Dict[str, str]],
+        max_tokens: int,
+        temperature: float,
+        top_p: float,
+    ) -> str:
+        pass
+
+
+class HuggingFaceModel(LanguageModel):
+    def __init__(self, model_name: str, api_token: str) -> None:
+        self.model_name = model_name
+        self.client = InferenceClient(token=api_token)
+
+    def generate(
+        self,
+        messages: List[Dict[str, str]],
+        max_tokens: int,
+        temperature: float,
+        top_p: float,
+    ) -> str:
+        return self.client.chat.completions.create(
+            model=self.model_name,
+            messages=messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            top_p=top_p,
+        )
 
 
 class HaikuConverter:
@@ -36,8 +71,10 @@ class HaikuConverter:
                 "Get your token at: https://huggingface.co/settings/tokens"
             )
 
-        self.client = InferenceClient(token=self.api_token)
-        self.dic = pyphen.Pyphen(lang='en_US')
+        self.model = HuggingFaceModel(
+            model_name=self.model_name, api_token=self.api_token
+        )
+        self.dic = pyphen.Pyphen(lang="en_US")
 
     def create_line_messages(
         self,
@@ -85,14 +122,14 @@ Try again with a different phrasing."""
         total = 0
         for word in words:
             # Remove punctuation and convert to lowercase
-            clean_word = re.sub(r'[^\w]', '', word).lower()
+            clean_word = re.sub(r"[^\w]", "", word).lower()
             if not clean_word:
                 continue
 
             # Get hyphenation and count parts
             hyphenated = self.dic.inserted(clean_word)
             # Count hyphens + 1 = number of syllables
-            syllable_count = hyphenated.count('-') + 1
+            syllable_count = hyphenated.count("-") + 1
             total += syllable_count
 
         return total
@@ -135,8 +172,7 @@ Try again with a different phrasing."""
             )
 
             try:
-                completion = self.client.chat.completions.create(
-                    model=self.model_name,
+                completion = self.model.generate(
                     messages=messages,
                     max_tokens=50,
                     temperature=0.7,

@@ -1,9 +1,10 @@
-from textual.app import App, ComposeResult
-from textual.widgets import Input, Static, Button, Label
-from textual.containers import Vertical, Horizontal
-from textual import work
-from haikufy.converter import HaikuConverter
 import pyperclip
+from textual import work
+from textual.app import App, ComposeResult
+from textual.containers import Horizontal, Vertical
+from textual.widgets import Button, Input, Label, Static
+
+from haikufy.converter import HaikuConverter
 
 
 class HaikufyApp(App):
