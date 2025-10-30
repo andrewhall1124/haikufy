@@ -2,7 +2,7 @@ from typing import Dict, List
 
 from huggingface_hub import InferenceClient
 
-from src.haikufy.models.language_model import LanguageModel
+from .language_model import LanguageModel
 
 
 class HuggingFaceModel(LanguageModel):

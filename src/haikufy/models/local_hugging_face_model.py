@@ -3,7 +3,7 @@ from typing import Dict, List
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 
-from src.haikufy.models.language_model import LanguageModel
+from .language_model import LanguageModel
 
 
 class LocalHuggingFaceModel(LanguageModel):
