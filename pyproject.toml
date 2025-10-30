@@ -27,8 +27,8 @@ classifiers = [
 dependencies = [
     "huggingface-hub>=0.35.3",
     "pyperclip>=1.8.2",
+    "pyphen>=0.16.0",
     "python-dotenv>=1.0.1",
-    "syllables>=1.0.9",
     "textual>=0.73.0",
 ]
 

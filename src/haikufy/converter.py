@@ -1,5 +1,6 @@
 import os
-import syllables
+import pyphen
+import re
 from typing import Optional, List, Dict, Tuple
 from dotenv import load_dotenv
 from huggingface_hub import InferenceClient
@@ -36,6 +37,7 @@ class HaikuConverter:
             )
 
         self.client = InferenceClient(token=self.api_token)
+        self.dic = pyphen.Pyphen(lang='en_US')
 
     def create_line_messages(
         self,
@@ -78,9 +80,21 @@ Try again with a different phrasing."""
         return [{"role": "user", "content": context + instruction}]
 
     def count_syllables_in_line(self, line: str) -> int:
-        """Count syllables in a line of text"""
+        """Count syllables in a line of text using pyphen dictionary-based hyphenation"""
         words = line.strip().split()
-        total = sum(syllables.estimate(word) for word in words)
+        total = 0
+        for word in words:
+            # Remove punctuation and convert to lowercase
+            clean_word = re.sub(r'[^\w]', '', word).lower()
+            if not clean_word:
+                continue
+
+            # Get hyphenation and count parts
+            hyphenated = self.dic.inserted(clean_word)
+            # Count hyphens + 1 = number of syllables
+            syllable_count = hyphenated.count('-') + 1
+            total += syllable_count
+
         return total
 
     def validate_haiku(self, haiku_text: str) -> Tuple[bool, List[int]]:
