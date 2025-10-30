@@ -30,6 +30,8 @@ dependencies = [
     "pyphen>=0.16.0",
     "python-dotenv>=1.0.1",
     "textual>=0.73.0",
+    "torch>=2.5.1",
+    "transformers>=4.46.3",
 ]
 
 [project.urls]
