@@ -2,6 +2,8 @@ import os
 import re
 from typing import Dict, List, Optional, Tuple
 from src.haikufy.models.hugging_face_model import HuggingFaceModel
+from src.haikufy.models.local_hugging_face_model import LocalHuggingFaceModel
+from src.haikufy.models.custom_model import CustomModel
 
 import pyphen
 from dotenv import load_dotenv
@@ -14,7 +16,8 @@ LOGGING = True
 class HaikuConverter:
     def __init__(
         self,
-        model_name: str = "deepseek-ai/DeepSeek-V3-0324",
+        model_name: str = "meta-llama/Llama-3.2-1B-Instruct", # "deepseek-ai/DeepSeek-V3-0324"
+        model_wrapper: str = 'hf-inference',
         api_token: Optional[str] = None,
     ) -> None:
         """
@@ -37,9 +40,23 @@ class HaikuConverter:
                 "Get your token at: https://huggingface.co/settings/tokens"
             )
 
-        self.model = HuggingFaceModel(
-            model_name=self.model_name, api_token=self.api_token
-        )
+        match model_wrapper:
+            case 'hf-inference':
+                self.model = HuggingFaceModel(
+                    model_name=self.model_name, api_token=self.api_token
+                )
+            case 'hf-local':
+                self.model = LocalHuggingFaceModel(
+                    model_name=self.model_name, api_token=self.api_token
+                )
+            case 'hf-custom':
+                self.model = CustomModel(
+                    model_name=self.model_name, api_token=self.api_token
+                )
+
+            case _:
+                raise ValueError("Invalid model_wrapper type!")
+                
         self.dic = pyphen.Pyphen(lang="en_US")
 
     def create_line_messages(
@@ -82,20 +99,85 @@ Try again with a different phrasing."""
 
         return [{"role": "user", "content": context + instruction}]
 
+    def count_syllables_in_word(self, word: str) -> int:
+        """
+        Count syllables in a single word using pyphen with fallback heuristic.
+
+        First tries dictionary-based hyphenation (pyphen), then falls back to
+        a vowel-counting heuristic for words not in the dictionary.
+        """
+        # Remove punctuation and convert to lowercase
+        clean_word = re.sub(r"[^\w]", "", word).lower()
+        if not clean_word:
+            return 0
+
+        # Skip pure numbers
+        if clean_word.isdigit():
+            return 0
+
+        # Try pyphen first (dictionary-based)
+        hyphenated = self.dic.inserted(clean_word)
+
+        # If pyphen inserted hyphens, it knows the word
+        if "-" in hyphenated:
+            return hyphenated.count("-") + 1
+
+        # Fallback heuristic for words not in dictionary
+        # This handles proper nouns, technical terms, etc.
+        return self._count_syllables_heuristic(clean_word)
+
+    def _count_syllables_heuristic(self, word: str) -> int:
+        """
+        Heuristic syllable counter based on vowel patterns.
+        Used as fallback when pyphen doesn't recognize a word.
+        """
+        word = word.lower()
+
+        # Handle empty or very short words
+        if len(word) <= 1:
+            return 1 if word else 0
+
+        # Count vowel groups
+        vowels = "aeiouy"
+        syllable_count = 0
+        previous_was_vowel = False
+
+        for i, char in enumerate(word):
+            is_vowel = char in vowels
+
+            if is_vowel and not previous_was_vowel:
+                syllable_count += 1
+
+            previous_was_vowel = is_vowel
+
+        # Adjust for common patterns
+
+        # Silent 'e' at the end (like "make", "time")
+        if word.endswith('e') and syllable_count > 1:
+            syllable_count -= 1
+
+        # Words ending in 'le' with consonant before (like "table", "riddle")
+        if len(word) >= 3 and word.endswith('le') and word[-3] not in vowels:
+            # If we already counted it, don't add; if not, add one
+            if syllable_count == 0:
+                syllable_count = 1
+
+        # Words ending in 'ed' (past tense)
+        # "walked" = 1 syllable, "created" = 3 syllables
+        if word.endswith('ed') and syllable_count > 1:
+            # Check if the 'ed' should be silent
+            if len(word) >= 3 and word[-3] not in 'td':
+                syllable_count -= 1
+
+        # Ensure at least 1 syllable
+        return max(1, syllable_count)
+
     def count_syllables_in_line(self, line: str) -> int:
-        """Count syllables in a line of text using pyphen dictionary-based hyphenation"""
+        """Count syllables in a line of text"""
         words = line.strip().split()
         total = 0
         for word in words:
-            # Remove punctuation and convert to lowercase
-            clean_word = re.sub(r"[^\w]", "", word).lower()
-            if not clean_word:
-                continue
-
-            # Get hyphenation and count parts
-            hyphenated = self.dic.inserted(clean_word)
-            # Count hyphens + 1 = number of syllables
-            syllable_count = hyphenated.count("-") + 1
+            syllable_count = self.count_syllables_in_word(word)
             total += syllable_count
 
         return total
@@ -141,13 +223,12 @@ Try again with a different phrasing."""
                 completion = self.model.generate(
                     messages=messages,
                     max_tokens=50,
-                    temperature=0.7,
+                    temperature=1,
                     top_p=0.9,
                 )
 
-                generated_line = completion.choices[0].message.content.strip()
                 # Clean up any quotes or extra formatting
-                generated_line = generated_line.strip('"').strip("'").strip()
+                generated_line = completion.strip('"').strip("'").strip()
 
             except Exception as e:
                 print(f"  API request failed: {e}")
