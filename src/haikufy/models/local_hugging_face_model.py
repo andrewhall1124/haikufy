@@ -27,11 +27,7 @@ class LocalHuggingFaceModel(LanguageModel):
         self,
         messages: List[Dict[str, str]],
         max_tokens: int,
-        temperature: float = 0.7,
-        top_p: float = 0.9,
-        top_k: int | None = None,
-        num_beams: int = 1,
-        do_sample: bool | None = None,
+        **kwargs
     ) -> str:
         """
         Generate text with configurable decoding methods.
@@ -39,11 +35,7 @@ class LocalHuggingFaceModel(LanguageModel):
         Args:
             messages: List of chat messages
             max_tokens: Maximum tokens to generate
-            temperature: Sampling temperature (higher = more random)
-            top_p: Nucleus sampling threshold
-            top_k: Top-K sampling threshold (optional)
-            num_beams: Number of beams for beam search (1 = no beam search)
-            do_sample: Explicit sampling control (auto-determined if None)
+            **kwargs: Generation parameters (temperature, top_p, top_k, num_beams, do_sample)
 
         Decoding Methods:
             - Greedy: temperature=0 or do_sample=False, num_beams=1
@@ -52,6 +44,13 @@ class LocalHuggingFaceModel(LanguageModel):
             - Top-P: top_p=0.9, temperature > 0
             - Temperature Sampling: temperature > 0, no top_k/top_p
         """
+        # Extract parameters (only use defaults if not provided)
+        temperature = kwargs.get('temperature')
+        top_p = kwargs.get('top_p')
+        top_k = kwargs.get('top_k')
+        num_beams = kwargs.get('num_beams', 1)
+        do_sample = kwargs.get('do_sample')
+
         # Apply chat template
         prompt = self.tokenizer.apply_chat_template(
             messages,
@@ -70,20 +69,25 @@ class LocalHuggingFaceModel(LanguageModel):
 
         # Auto-determine sampling if not explicitly set
         if do_sample is None:
-            do_sample = temperature > 0 and num_beams == 1
+            do_sample = (temperature is None or temperature > 0) and num_beams == 1
 
         # Beam search mode (deterministic)
         if num_beams > 1:
             gen_kwargs["num_beams"] = num_beams
             gen_kwargs["do_sample"] = False
+            # Don't include sampling parameters for beam search
+        # Greedy decoding (deterministic)
+        elif do_sample is False or temperature == 0:
+            gen_kwargs["do_sample"] = False
+            # Don't include sampling parameters for greedy decoding
         # Sampling mode
         else:
-            gen_kwargs["do_sample"] = do_sample
-            if do_sample:
-                gen_kwargs["temperature"] = temperature
-                gen_kwargs["top_p"] = top_p
-                if top_k is not None:
-                    gen_kwargs["top_k"] = top_k
+            gen_kwargs["do_sample"] = True
+            # Apply defaults for sampling parameters if not provided
+            gen_kwargs["temperature"] = temperature if temperature is not None else 0.7
+            gen_kwargs["top_p"] = top_p if top_p is not None else 0.9
+            if top_k is not None:
+                gen_kwargs["top_k"] = top_k
 
         # Generate
         outputs = self.model.generate(**inputs, **gen_kwargs)

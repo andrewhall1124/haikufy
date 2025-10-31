@@ -116,63 +116,13 @@ class ModelEvaluator:
                 temperature=kwargs.get("temperature", 0.7),
                 top_p=kwargs.get("top_p", 0.9)
             )
-        else:  # local
-            return self._generate_local_with_method(
-                decoding_method=decoding_method,
+        else:  # local - use native decoding method parameters
+            return self.current_model.generate(
                 messages=messages,
                 max_tokens=max_tokens,
                 **kwargs
             )
 
-    def _get_generation_config(self, decoding_method: str, **kwargs) -> dict:
-        """Get generation config for a specific decoding method."""
-        base_config = {
-            "max_new_tokens": kwargs.get("max_tokens", 50),
-            "pad_token_id": self.current_model.tokenizer.pad_token_id,
-        }
-
-        method_configs = {
-            "greedy": {"do_sample": False, "num_beams": 1},
-            "beam_search": {"do_sample": False, "num_beams": kwargs.get("num_beams", 5)},
-            "top_k": {"do_sample": True, "top_k": kwargs.get("top_k", 50), "temperature": kwargs.get("temperature", 0.7)},
-            "top_p": {"do_sample": True, "top_p": kwargs.get("top_p", 0.9), "temperature": kwargs.get("temperature", 0.7)},
-            "sampling": {"do_sample": True, "temperature": kwargs.get("temperature", 1.0)},
-        }
-
-        base_config.update(method_configs.get(decoding_method, {}))
-        return base_config
-
-    def _generate_local_with_method(
-        self,
-        decoding_method: str,
-        messages: List[Dict[str, str]],
-        max_tokens: int,
-        **kwargs
-    ) -> str:
-        """Generate text with LocalHuggingFaceModel using different decoding methods."""
-        prompt = self.current_model.tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True
-        )
-
-        inputs = self.current_model.tokenizer(prompt, return_tensors="pt").to(self.current_model.device)
-        gen_kwargs = self._get_generation_config(decoding_method, max_tokens=max_tokens, **kwargs)
-
-        with torch.no_grad():
-            outputs = self.current_model.model.generate(
-                input_ids=inputs['input_ids'],
-                attention_mask=inputs.get('attention_mask'),
-                **gen_kwargs
-            )
-            generated_tokens = outputs[0][inputs['input_ids'].shape[1]:]
-            result = self.current_model.tokenizer.decode(generated_tokens, skip_special_tokens=True)
-
-        del inputs, outputs, generated_tokens
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-
-        return result
 
     def _calculate_bleu(self, generated: str, reference: str) -> float:
         """Calculate BLEU score."""
@@ -208,11 +158,11 @@ class ModelEvaluator:
         """Get list of (model_type, method, name, params) configurations to evaluate."""
         return [
             ("custom", "beam_search", "Custom Model (Beam Search)", {"temperature": 0.7, "top_p": 0.9}),
-            ("local", "greedy", "Local Model (Greedy)", {}),
+            ("local", "greedy", "Local Model (Greedy)", {"temperature": 0, "do_sample": False}),
             ("local", "beam_search", "Local Model (Beam Search)", {"num_beams": 5}),
             ("local", "top_k", "Local Model (Top-K)", {"top_k": 50, "temperature": 0.7}),
             ("local", "top_p", "Local Model (Top-P)", {"top_p": 0.9, "temperature": 0.7}),
-            ("local", "sampling", "Local Model (Sampling)", {"temperature": 1.0}),
+            ("local", "sampling", "Local Model (Sampling)", {"temperature": 1.0, "top_k": None}),
         ]
 
     def _calculate_average_metrics(self, all_metrics: List[Dict[str, float]]) -> Dict[str, float]:

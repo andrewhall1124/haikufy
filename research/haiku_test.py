@@ -10,10 +10,9 @@ prompt = "Do you want to run today?"
 # Define decoding methods to test
 decoding_configs = [
     ("Greedy", {"temperature": 0, "do_sample": False}, 'hf-local'),
-    ("Beam Search", {"num_beams": 5}, 'hf-local'),
+    # ("Beam Search", {"num_beams": 5}, 'hf-local'),
     ("Top-K Sampling", {"top_k": 50, "temperature": 0.7}, 'hf-local'),
     ("Top-P Sampling", {"top_p": 0.9, "temperature": 0.7}, 'hf-local'),
-    ("Temperature Sampling", {"temperature": 1.0}, 'hf-local'),
     ("Custom Beam Search (top_p=0.9)", {"temperature": 0.7, "top_p": 0.9}, 'hf-custom'),
 ]
 

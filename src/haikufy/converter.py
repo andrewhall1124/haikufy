@@ -35,7 +35,11 @@ class HaikuConverter:
 
         self.model_name = model_name
         self.api_token = api_token or os.getenv("HF_TOKEN")
-        self.generation_config = generation_config or {"temperature": 1, "top_p": 0.9}
+        # Only set defaults if no config provided at all
+        if generation_config is None:
+            self.generation_config = {"temperature": 1, "top_p": 0.9}
+        else:
+            self.generation_config = generation_config
 
         if not self.api_token:
             raise ValueError(
