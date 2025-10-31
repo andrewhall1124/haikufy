@@ -9,25 +9,27 @@ prompt = "Do you want to run today?"
 
 # Define decoding methods to test
 decoding_configs = [
-    ("Greedy", {"temperature": 0, "do_sample": False}),
-    ("Beam Search", {"num_beams": 5}),
-    ("Top-K Sampling", {"top_k": 50, "temperature": 0.7}),
-    ("Top-P Sampling", {"top_p": 0.9, "temperature": 0.7}),
-    ("Temperature Sampling", {"temperature": 1.0}),
+    ("Greedy", {"temperature": 0, "do_sample": False}, 'hf-local'),
+    ("Beam Search", {"num_beams": 5}, 'hf-local'),
+    ("Top-K Sampling", {"top_k": 50, "temperature": 0.7}, 'hf-local'),
+    ("Top-P Sampling", {"top_p": 0.9, "temperature": 0.7}, 'hf-local'),
+    ("Temperature Sampling", {"temperature": 1.0}, 'hf-local'),
+    ("Custom Beam Search (top_p=0.9)", {"temperature": 0.7, "top_p": 0.9}, 'hf-custom'),
 ]
 
 console.print("=" * 80)
 console.print(f"[bold]Prompt:[/bold] {prompt}")
 console.print("=" * 80)
 
-for method_name, config in decoding_configs:
+for method_name, config, wrapper in decoding_configs:
     console.print(f"\n[bold cyan]Decoding Method: {method_name}[/bold cyan]")
+    console.print(f"[dim]Wrapper: {wrapper}[/dim]")
     console.print("-" * 80)
 
     try:
         # Create converter with specific decoding configuration
         hc = HaikuConverter(
-            model_wrapper='hf-local',
+            model_wrapper=wrapper,
             generation_config=config
         )
 
