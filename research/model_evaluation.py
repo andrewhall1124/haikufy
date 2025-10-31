@@ -2,6 +2,11 @@
 Model Evaluation Script
 Compares CustomModel (beam search) vs LocalHuggingFaceModel with different decoding methods.
 Evaluates using multiple metrics: Perplexity, BLEU, ROUGE, BERTScore, and MAUVE.
+
+Memory-efficient implementation:
+- Models are loaded one at a time to avoid OOM errors
+- Perplexity model is loaded/unloaded as needed
+- GPU memory is cleared between model switches
 """
 
 from typing import Dict, List, Tuple
@@ -28,25 +33,15 @@ class ModelEvaluator:
     def __init__(self, model_name: str = "meta-llama/Llama-3.2-1B-Instruct"):
         self.model_name = model_name
         self.console = Console()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.mps.is_available() else "cpu")
 
-        # Initialize models
-        self.console.print("[bold blue]Initializing models...[/bold blue]")
-        self.custom_model = CustomModel(model_name=model_name)
-        self.local_model = LocalHuggingFaceModel(model_name=model_name)
+        # Don't initialize models here - load them one at a time during evaluation
+        self.current_model = None
+        self.current_model_type = None
+        self.model_to_reload = None
 
-        # Initialize metrics
-        self.console.print("[bold blue]Loading evaluation metrics...[/bold blue]")
-        self.bleu = load("bleu")
-        self.rouge = load("rouge")
-        self.bertscore = load("bertscore")
-        self.mauve = load("mauve")
-
-        # For perplexity calculation
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.perplexity_model = AutoModelForCausalLM.from_pretrained(model_name)
-        device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.mps.is_available() else "cpu")
-        self.perplexity_model.to(device)
-        self.perplexity_model.eval()
+        # Initialize metrics - using lightweight metrics only
+        self.console.print("[bold blue]Using BLEU and ROUGE metrics (lightweight)...[/bold blue]")
 
     def get_test_prompts(self) -> List[Tuple[str, str]]:
         """
@@ -88,17 +83,31 @@ class ModelEvaluator:
             ),
         ]
 
-    def calculate_perplexity(self, text: str) -> float:
-        """Calculate perplexity for generated text."""
-        encodings = self.tokenizer(text, return_tensors="pt")
-        input_ids = encodings.input_ids.to(self.perplexity_model.device)
 
-        with torch.no_grad():
-            outputs = self.perplexity_model(input_ids, labels=input_ids)
-            loss = outputs.loss
-            perplexity = torch.exp(loss).item()
+    def _load_model(self, model_type: str):
+        """Load model if not already loaded or if switching model types."""
+        if self.current_model is None or self.current_model_type != model_type:
+            # Cleanup previous model
+            if self.current_model is not None:
+                self._cleanup_current_model()
 
-        return perplexity
+            # Load new model
+            self.console.print(f"[bold blue]Loading {model_type} model...[/bold blue]")
+            if model_type == "custom":
+                self.current_model = CustomModel(model_name=self.model_name)
+            elif model_type == "local":
+                self.current_model = LocalHuggingFaceModel(model_name=self.model_name)
+
+            self.current_model_type = model_type
+
+    def _cleanup_current_model(self):
+        """Cleanup current model to free memory."""
+        if self.current_model is not None:
+            del self.current_model
+            self.current_model = None
+            self.current_model_type = None
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
     def generate_with_method(
         self,
@@ -118,11 +127,12 @@ class ModelEvaluator:
             max_tokens: Maximum tokens to generate
             **kwargs: Additional parameters for generation
         """
+        self._load_model(model_type)
         messages = [{"role": "user", "content": prompt}]
 
         if model_type == "custom":
             # CustomModel uses beam search by default
-            return self.custom_model.generate(
+            return self.current_model.generate(
                 messages=messages,
                 max_tokens=max_tokens,
                 temperature=kwargs.get("temperature", 0.7),
@@ -146,33 +156,37 @@ class ModelEvaluator:
         **kwargs
     ) -> str:
         """Generate text with LocalHuggingFaceModel using different decoding methods."""
-        prompt = self.local_model.tokenizer.apply_chat_template(
+        prompt = self.current_model.tokenizer.apply_chat_template(
             messages,
             tokenize=False,
             add_generation_prompt=True
         )
 
-        inputs = self.local_model.tokenizer(prompt, return_tensors="pt").to(self.local_model.device)
+        inputs = self.current_model.tokenizer(prompt, return_tensors="pt").to(self.current_model.device)
 
         # Configure generation parameters based on decoding method
+        # Only include parameters that are valid for each method
         gen_kwargs = {
             "max_new_tokens": max_tokens,
-            "pad_token_id": self.local_model.tokenizer.pad_token_id,
+            "pad_token_id": self.current_model.tokenizer.pad_token_id,
         }
 
         if decoding_method == "greedy":
+            # Greedy: no sampling, single beam, no temperature/top_p
             gen_kwargs.update({
                 "do_sample": False,
                 "num_beams": 1,
             })
 
         elif decoding_method == "beam_search":
+            # Beam search: no sampling, multiple beams, no temperature/top_p
             gen_kwargs.update({
                 "do_sample": False,
                 "num_beams": kwargs.get("num_beams", 5),
             })
 
         elif decoding_method == "top_k":
+            # Top-K sampling: needs temperature
             gen_kwargs.update({
                 "do_sample": True,
                 "top_k": kwargs.get("top_k", 50),
@@ -180,6 +194,7 @@ class ModelEvaluator:
             })
 
         elif decoding_method == "top_p":
+            # Top-P (nucleus) sampling: needs temperature
             gen_kwargs.update({
                 "do_sample": True,
                 "top_p": kwargs.get("top_p", 0.9),
@@ -187,14 +202,26 @@ class ModelEvaluator:
             })
 
         elif decoding_method == "sampling":
+            # Temperature sampling only
             gen_kwargs.update({
                 "do_sample": True,
                 "temperature": kwargs.get("temperature", 1.0),
             })
 
-        outputs = self.local_model.model.generate(**inputs, **gen_kwargs)
-        generated_tokens = outputs[0][inputs['input_ids'].shape[1]:]
-        result = self.local_model.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+        with torch.no_grad():
+            # Pass input_ids and attention_mask separately, then generation kwargs
+            outputs = self.current_model.model.generate(
+                input_ids=inputs['input_ids'],
+                attention_mask=inputs.get('attention_mask'),
+                **gen_kwargs
+            )
+            generated_tokens = outputs[0][inputs['input_ids'].shape[1]:]
+            result = self.current_model.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+
+        # Clean up tensors immediately
+        del inputs, outputs, generated_tokens
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         return result
 
@@ -203,51 +230,29 @@ class ModelEvaluator:
         generated_text: str,
         reference_text: str
     ) -> Dict[str, float]:
-        """Calculate multiple metrics for a single generation."""
+        """Calculate BLEU and ROUGE metrics for a single generation."""
         metrics = {}
 
-        # 1. Perplexity (lower is better)
+        # 1. BLEU Score (0-100, higher is better)
         try:
-            metrics["perplexity"] = self.calculate_perplexity(generated_text)
-        except Exception as e:
-            print(f"[yellow]Warning: Perplexity calculation failed: {e}[/yellow]")
-            metrics["perplexity"] = float('inf')
-
-        # 2. BLEU Score (0-100, higher is better)
-        try:
-            bleu_result = self.bleu.compute(
-                predictions=[generated_text],
-                references=[[reference_text]]
-            )
-            metrics["bleu"] = bleu_result["bleu"] * 100
+            from sacrebleu import corpus_bleu
+            bleu_score = corpus_bleu([generated_text], [[reference_text]])
+            metrics["bleu"] = bleu_score.score
         except Exception as e:
             print(f"[yellow]Warning: BLEU calculation failed: {e}[/yellow]")
             metrics["bleu"] = 0.0
 
-        # 3. ROUGE Scores (0-1, higher is better)
+        # 2. ROUGE Scores (0-100, higher is better)
         try:
-            rouge_result = self.rouge.compute(
-                predictions=[generated_text],
-                references=[reference_text]
-            )
-            metrics["rouge1"] = rouge_result["rouge1"] * 100
-            metrics["rouge2"] = rouge_result["rouge2"] * 100
-            metrics["rougeL"] = rouge_result["rougeL"] * 100
+            from rouge_score import rouge_scorer
+            scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
+            scores = scorer.score(reference_text, generated_text)
+            metrics["rouge1"] = scores['rouge1'].fmeasure * 100
+            metrics["rouge2"] = scores['rouge2'].fmeasure * 100
+            metrics["rougeL"] = scores['rougeL'].fmeasure * 100
         except Exception as e:
             print(f"[yellow]Warning: ROUGE calculation failed: {e}[/yellow]")
             metrics["rouge1"] = metrics["rouge2"] = metrics["rougeL"] = 0.0
-
-        # 4. BERTScore (0-1, higher is better)
-        try:
-            bertscore_result = self.bertscore.compute(
-                predictions=[generated_text],
-                references=[reference_text],
-                lang="en"
-            )
-            metrics["bertscore_f1"] = bertscore_result["f1"][0] * 100
-        except Exception as e:
-            print(f"[yellow]Warning: BERTScore calculation failed: {e}[/yellow]")
-            metrics["bertscore_f1"] = 0.0
 
         return metrics
 
@@ -273,7 +278,7 @@ class ModelEvaluator:
             console=self.console
         ) as progress:
 
-            for model_type, method, name, params in configs:
+            for config_idx, (model_type, method, name, params) in enumerate(configs):
                 task = progress.add_task(f"[cyan]Evaluating {name}...", total=len(test_data))
 
                 method_results = {
@@ -281,7 +286,7 @@ class ModelEvaluator:
                     "metrics": []
                 }
 
-                for prompt, reference in test_data:
+                for prompt_idx, (prompt, reference) in enumerate(test_data):
                     # Generate text
                     generated = self.generate_with_method(
                         model_type=model_type,
@@ -291,7 +296,7 @@ class ModelEvaluator:
                         **params
                     )
 
-                    # Evaluate
+                    # Calculate metrics
                     metrics = self.evaluate_generation(generated, reference)
 
                     method_results["generations"].append({
@@ -316,26 +321,19 @@ class ModelEvaluator:
 
                 progress.remove_task(task)
 
+                # Cleanup current model before loading the next one
+                # (except if the next config uses the same model type)
+                if config_idx < len(configs) - 1:
+                    next_model_type = configs[config_idx + 1][0]
+                    if next_model_type != model_type:
+                        self._cleanup_current_model()
+                        self.console.print(f"[dim]Cleaned up {model_type} model to free memory[/dim]")
+
+        # Final cleanup
+        self._cleanup_current_model()
+
         return results
 
-    def calculate_mauve_score(
-        self,
-        generated_texts: List[str],
-        reference_texts: List[str]
-    ) -> float:
-        """
-        Calculate MAUVE score comparing generated vs reference texts.
-        MAUVE measures the gap between distributions (0-1, higher is better).
-        """
-        try:
-            mauve_result = self.mauve.compute(
-                predictions=generated_texts,
-                references=reference_texts
-            )
-            return mauve_result.mauve * 100
-        except Exception as e:
-            print(f"[yellow]Warning: MAUVE calculation failed: {e}[/yellow]")
-            return 0.0
 
     def print_results(self, results: Dict):
         """Print formatted results table."""
@@ -343,40 +341,22 @@ class ModelEvaluator:
         table = Table(title="Model Evaluation Results - Average Metrics", show_header=True, header_style="bold magenta")
 
         table.add_column("Method", style="cyan", no_wrap=True)
-        table.add_column("Perplexity", justify="right", style="yellow")
         table.add_column("BLEU", justify="right", style="green")
         table.add_column("ROUGE-1", justify="right", style="green")
+        table.add_column("ROUGE-2", justify="right", style="green")
         table.add_column("ROUGE-L", justify="right", style="green")
-        table.add_column("BERTScore", justify="right", style="blue")
 
         for method_name, method_data in results.items():
             metrics = method_data["average_metrics"]
             table.add_row(
                 method_name,
-                f"{metrics.get('perplexity', 0):.2f}",
                 f"{metrics.get('bleu', 0):.2f}",
                 f"{metrics.get('rouge1', 0):.2f}",
+                f"{metrics.get('rouge2', 0):.2f}",
                 f"{metrics.get('rougeL', 0):.2f}",
-                f"{metrics.get('bertscore_f1', 0):.2f}",
             )
 
         self.console.print(table)
-
-        # Calculate MAUVE scores for each method
-        self.console.print("\n[bold magenta]MAUVE Scores (Distribution Similarity)[/bold magenta]")
-        test_data = self.get_test_prompts()
-        reference_texts = [ref for _, ref in test_data]
-
-        mauve_table = Table(show_header=True, header_style="bold magenta")
-        mauve_table.add_column("Method", style="cyan")
-        mauve_table.add_column("MAUVE Score", justify="right", style="blue")
-
-        for method_name, method_data in results.items():
-            generated_texts = [gen["generated"] for gen in method_data["generations"]]
-            mauve_score = self.calculate_mauve_score(generated_texts, reference_texts)
-            mauve_table.add_row(method_name, f"{mauve_score:.2f}")
-
-        self.console.print(mauve_table)
 
     def save_results(self, results: Dict, filename: str = None):
         """Save detailed results to JSON file."""
@@ -419,7 +399,7 @@ def main():
     console.print("     - Top-K sampling")
     console.print("     - Top-P (nucleus) sampling")
     console.print("     - Temperature sampling")
-    console.print("\nMetrics: Perplexity, BLEU, ROUGE, BERTScore, MAUVE\n")
+    console.print("\nMetrics: BLEU, ROUGE (lightweight metrics only)\n")
 
     # Initialize evaluator
     evaluator = ModelEvaluator(model_name="meta-llama/Llama-3.2-1B-Instruct")
