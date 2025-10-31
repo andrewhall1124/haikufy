@@ -1,16 +1,16 @@
 import os
 import re
 from typing import Dict, List, Optional, Tuple
-from src.haikufy.models.hugging_face_model import HuggingFaceModel
-from src.haikufy.models.local_hugging_face_model import LocalHuggingFaceModel
-from src.haikufy.models.custom_model import CustomModel
+from haikufy.models.hugging_face_model import HuggingFaceModel
+from haikufy.models.local_hugging_face_model import LocalHuggingFaceModel
+from haikufy.models.custom_model import CustomModel
 
 import pyphen
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
-LOGGING = True
+LOGGING = False
 
 
 class HaikuConverter:
@@ -19,19 +19,23 @@ class HaikuConverter:
         model_name: str = "meta-llama/Llama-3.2-1B-Instruct", # "deepseek-ai/DeepSeek-V3-0324"
         model_wrapper: str = 'hf-inference',
         api_token: Optional[str] = None,
+        generation_config: Optional[Dict] = None,
     ) -> None:
         """
         Initialize the haiku converter with HuggingFace Inference Client
 
         Args:
             model_name: HuggingFace model to use
+            model_wrapper: Which model wrapper to use
             api_token: HuggingFace API token (or set HF_TOKEN environment variable)
+            generation_config: Optional generation parameters (temperature, top_p, top_k, num_beams, etc.)
         """
         if LOGGING:
             print(f"Initializing with model: {model_name}...")
 
         self.model_name = model_name
         self.api_token = api_token or os.getenv("HF_TOKEN")
+        self.generation_config = generation_config or {"temperature": 1, "top_p": 0.9}
 
         if not self.api_token:
             raise ValueError(
@@ -223,8 +227,7 @@ Try again with a different phrasing."""
                 completion = self.model.generate(
                     messages=messages,
                     max_tokens=50,
-                    temperature=1,
-                    top_p=0.9,
+                    **self.generation_config
                 )
 
                 # Clean up any quotes or extra formatting
@@ -257,9 +260,10 @@ Try again with a different phrasing."""
                 previous_attempt = generated_line
 
         # Return best attempt even if not valid
-        print(
-            f"Could not achieve {target_syllables} syllables after {max_attempts} attempts"
-        )
+        if LOGGING:
+            print(
+                f"Could not achieve {target_syllables} syllables after {max_attempts} attempts"
+            )
         return generated_line, actual_syllables, False
 
     def generate_haiku(
